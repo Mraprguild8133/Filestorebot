@@ -7,7 +7,7 @@ from pyrogram.enums import ParseMode
 import sys
 from datetime import datetime
 #rohit_1888 on Tg
-from config import *
+from config import config
 
 
 name ="""
