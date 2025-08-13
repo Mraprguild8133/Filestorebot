@@ -1,4 +1,4 @@
-from bot import bot.py
+from bot import bot
 import pyrogram.utils
 
 pyrogram.utils.MIN_CHANNEL_ID = -1009147483647
