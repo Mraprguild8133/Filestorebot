@@ -37,11 +37,14 @@ def get_env_var(name, default=None, required=False):
 
 # ============================ REQUIRED CONFIG ==============================
 try:
-    # Bot configuration
-    TG_BOT_TOKEN = get_env_var("TG_BOT_TOKEN", required=True)
-    APP_ID = int(get_env_var("APP_ID", required=True))
-    API_HASH = get_env_var("API_HASH", required=True)
-    
+    #Bot token @Botfather
+TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
+
+#Your API ID from my.telegram.org
+APP_ID = int(os.environ.get("APP_ID", ""))
+
+#Your API Hash from my.telegram.org
+API_HASH = os.environ.get("API_HASH", "")
     # Channel and owner info
     CHANNEL_ID = int(get_env_var("CHANNEL_ID", "-1002170811388"))
     OWNER = get_env_var("OWNER", "sewxiy")
