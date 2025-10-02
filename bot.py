@@ -242,7 +242,7 @@ class FileStoreBot(Client):
         Check if user is admin.
         
         Args:
-            user_id: User ID to check
+            OWNER_ID: User ID to check
             
         Returns:
             bool: True if user is admin, False otherwise
