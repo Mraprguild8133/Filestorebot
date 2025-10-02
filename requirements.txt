@@ -1,11 +1,11 @@
-pyrogram
-TgCrypto
-pyromod
-pymongo
-motor
-dnspython
-aiohttp
-python-dotenv
-pytz
-requests
-python-telegram-bot
+# Core Telegram Bot
+pyrogram==2.0.106
+TgCrypto==1.2.5
+pyromod==2.0.0
+
+# Web Server
+aiohttp==3.9.1
+
+# Utilities
+python-dotenv==1.0.0
+pytz==2023.3
