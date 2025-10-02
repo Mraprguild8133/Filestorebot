@@ -11,8 +11,9 @@ API_HASH = os.environ.get("API_HASH", "")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0))
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
 
-# Admin Configuration (Comma separated user IDs)
-ADMIN_IDS = [int(x.strip()) for x in os.environ.get("ADMIN_IDS", "").split(",") if x.strip()]
+# Database Configuration
+DATABASE_URL = os.environ.get("DATABASE_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DATABASE_NAME", "PrivateFileStore")
 
 # Server Configuration
 PORT = int(os.environ.get("PORT", 8000))
@@ -20,7 +21,7 @@ PORT = int(os.environ.get("PORT", 8000))
 # Bot Settings
 PROTECT_CONTENT = os.environ.get('PROTECT_CONTENT', "True").lower() == "true"
 DISABLE_CHANNEL_BUTTON = os.environ.get("DISABLE_CHANNEL_BUTTON", "False").lower() == "true"
-CUSTOM_CAPTION = os.environ.get("CUSTOM_CAPTION", "<b>• Shared via File Store Bot</b>")
+CUSTOM_CAPTION = os.environ.get("CUSTOM_CAPTION", "<b>• Shared via Private Bot</b>")
 
 # Auto-delete timer (in seconds)
 AUTO_DELETE_TIME = int(os.environ.get("AUTO_DELETE_TIME", "600"))  # 10 minutes default
@@ -29,18 +30,20 @@ AUTO_DELETE_TIME = int(os.environ.get("AUTO_DELETE_TIME", "600"))  # 10 minutes 
 START_MSG = """
 <b>👋 Hello {mention}!</b>
 
-This is a private file store bot for authorized users only.
+This is a private file store bot for authorized admins only.
 
-<b>🔒 Private Bot:</b>
-• Only admins can use this bot
-• Files are stored securely
-• Auto-delete after download
-
-<b>📁 Features:</b>
+<b>🔒 Admin Features:</b>
 • Secure file storage
 • Shareable links
-• Auto file deletion
-• Private access only
+• Auto-delete files
+• Admin management
+
+<b>📁 Commands:</b>
+• /start - Start bot
+• /help - Show commands
+• /genlink - Generate file link
+• /batch - Batch file links
+• /admins - Admin list
 """
 
 HELP_TXT = """
@@ -48,14 +51,17 @@ HELP_TXT = """
 
 • /start - Start the bot
 • /help - Show this help
-• /broadcast - Broadcast message to users
-• /stats - Bot statistics
 • /genlink - Generate file link
-• /batch - Generate batch file links
+• /batch - Generate batch links
+• /broadcast - Broadcast to admins
+• /stats - Bot statistics
+• /admins - List all admins
+• /add_admin - Add new admin
+• /del_admin - Remove admin
 
 <b>📝 Usage:</b>
-1. Send any file to store it
-2. Get a shareable link
+1. Send file to store in channel
+2. Get shareable link
 3. Share with authorized users
 """
 
@@ -63,12 +69,13 @@ ABOUT_TXT = """
 <b>🤖 Private File Store Bot</b>
 
 <b>🔒 Features:</b>
-• Private access only
-• Secure file storage
+• Admin-only access
+• MongoDB storage
+• Secure file sharing
 • Auto file deletion
-• Admin-only operations
 
-<b>⚡ Version:</b> 2.0
+<b>⚡ Version:</b> 2.0 (Motor)
+<b>💾 Database:</b> MongoDB
 <b>🔐 Access:</b> Admin Only
 """
 
@@ -90,8 +97,12 @@ logging.basicConfig(
 # Reduce noise from other libraries
 logging.getLogger("pyrogram").setLevel(logging.WARNING)
 logging.getLogger("aiohttp").setLevel(logging.WARNING)
+logging.getLogger("motor").setLevel(logging.WARNING)
 
 def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 LOGGER = get_logger(__name__)
+
+# Backward compatibility
+DB_URI = DATABASE_URL
