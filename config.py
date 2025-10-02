@@ -10,6 +10,10 @@ API_HASH = os.environ.get("API_HASH", "")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0))
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
 
+# Database Configuration
+DATABASE_URL = os.environ.get("DATABASE_URL", "mongodb://localhost:27017")
+DB_NAME = os.environ.get("DATABASE_NAME", "PrivateFileStore")
+
 # Server Configuration
 PORT = int(os.environ.get("PORT", 8000))
 
