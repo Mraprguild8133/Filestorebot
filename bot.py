@@ -12,10 +12,12 @@ from pyrogram.errors import (
 import pytz
 from datetime import datetime
 
+# Import specific variables from config
 from config import (
     APP_ID, API_HASH, TG_BOT_TOKEN, CHANNEL_ID, 
-    OWNER_ID, PORT, ADMIN_IDS, LOGGER, get_logger
+    OWNER_ID, PORT, DATABASE_URL, DB_NAME, get_logger
 )
+from database.database import db
 from plugins import web_server
 
 logger = get_logger(__name__)
@@ -37,7 +39,7 @@ class FileStoreBot(Client):
         self.db_channel = None
         self.username = None
         self._is_running = False
-        self.admin_ids = set(ADMIN_IDS) | {OWNER_ID}  # Combine admins and owner
+        self.admin_ids = set()
 
     async def validate_config(self):
         """Validate all configuration values."""
@@ -92,9 +94,20 @@ class FileStoreBot(Client):
             self.logger.error(f"❌ Unexpected error setting up DB channel: {e}")
             return False
 
+    async def load_admins(self):
+        """Load admin IDs from database."""
+        try:
+            admin_ids = await db.get_admin_ids()
+            self.admin_ids = set(admin_ids)
+            self.logger.info(f"✅ Loaded {len(self.admin_ids)} admins from database")
+        except Exception as e:
+            self.logger.error(f"❌ Failed to load admins: {e}")
+            # Fallback to owner only
+            self.admin_ids = {OWNER_ID}
+
     async def start(self):
         """Start the bot."""
-        self.logger.info("🚀 Starting Private File Store Bot...")
+        self.logger.info("🚀 Starting Private File Store Bot (Motor)...")
         
         # Validate configuration
         if not await self.validate_config():
@@ -118,10 +131,19 @@ class FileStoreBot(Client):
             self.uptime = datetime.now(pytz.timezone("Asia/Kolkata"))
             
             self.logger.info(f"✅ Bot started: @{bot_me.username}")
-            self.logger.info(f"✅ Admin users: {len(self.admin_ids)}")
         except Exception as e:
             self.logger.error(f"❌ Failed to get bot info: {e}")
             return False
+        
+        # Initialize database defaults
+        try:
+            await db.initialize_defaults()
+        except Exception as e:
+            self.logger.error(f"❌ Failed to initialize database defaults: {e}")
+            return False
+        
+        # Load admins
+        await self.load_admins()
         
         # Setup database channel
         if not await self.setup_db_channel():
@@ -140,18 +162,23 @@ class FileStoreBot(Client):
         # Notify owner
         await self.notify_owner()
         
-        self.logger.info("🎉 Private bot is now ready! (Admin only)")
+        self.logger.info("🎉 Private bot is now ready! (Motor + MongoDB)")
         return True
 
     async def notify_owner(self):
         """Notify owner about bot startup."""
         try:
+            admin_count = await db.get_admin_count()
+            auto_delete_time = await db.get_auto_delete_time()
+            
             await self.send_message(
                 OWNER_ID,
                 f"🤖 <b>Private Bot Started</b>\n\n"
                 f"• Bot: @{self.username}\n"
                 f"• Time: {self.uptime.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"• Admins: {len(self.admin_ids)} users\n"
+                f"• Admins: {admin_count} users\n"
+                f"• Auto-delete: {auto_delete_time}s\n"
+                f"• Database: MongoDB (Motor)\n"
                 f"• Mode: Private (Admin Only)"
             )
         except Exception as e:
@@ -175,6 +202,10 @@ class FileStoreBot(Client):
         """Check if user is admin."""
         return user_id in self.admin_ids
 
+    async def reload_admins(self):
+        """Reload admin list from database."""
+        await self.load_admins()
+
     def run(self):
         """Run the bot."""
         # Set up signal handlers
@@ -191,6 +222,7 @@ class FileStoreBot(Client):
         success = False
         try:
             # Start the bot
+            self.logger.info("🟡 Attempting to start bot...")
             success = loop.run_until_complete(self.start())
             
             if success:
@@ -207,6 +239,7 @@ class FileStoreBot(Client):
             sys.exit(1)
         finally:
             # Cleanup
+            self.logger.info("🧹 Cleaning up...")
             if success:
                 loop.run_until_complete(self.stop())
             loop.close()
