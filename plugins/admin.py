@@ -62,20 +62,29 @@ async def add_admin(client: Client, message: Message):
                 ])
             )
         
-        # Check existing admins
-        existing_admins = await db.get_all_admins()
+        # Add admins
         added_ids = []
-        skipped_ids = []
+        failed_ids = []
         
         for user_id in valid_ids:
-            if user_id in existing_admins:
-                skipped_ids.append(f"🔄 Already admin: `{user_id}`")
-                continue
-            
-            if await db.add_admin(user_id):
-                added_ids.append(f"✅ Added: `{user_id}`")
-            else:
-                skipped_ids.append(f"❌ Failed: `{user_id}`")
+            try:
+                # Get user info for username
+                try:
+                    user_info = await client.get_users(user_id)
+                    username = user_info.username or user_info.first_name
+                except:
+                    username = "Unknown"
+                
+                if await db.add_admin(user_id, username):
+                    added_ids.append(f"✅ Added: `{user_id}` ({username})")
+                else:
+                    failed_ids.append(f"❌ Failed: `{user_id}`")
+                    
+            except Exception as e:
+                failed_ids.append(f"❌ Error: `{user_id}` - {e}")
+        
+        # Reload admin cache
+        await client.reload_admins()
         
         # Prepare response
         response = ["**👥 Admin Addition Results**\n"]
@@ -84,18 +93,19 @@ async def add_admin(client: Client, message: Message):
             response.append("\n**✅ Added:**")
             response.extend(added_ids)
         
-        if skipped_ids:
-            response.append("\n**⚠️ Skipped:**")
-            response.extend(skipped_ids)
+        if failed_ids:
+            response.append("\n**❌ Failed:**")
+            response.extend(failed_ids)
         
         if invalid_ids:
-            response.append("\n**❌ Invalid:**")
+            response.append("\n**⚠️ Invalid:**")
             response.extend(invalid_ids)
         
         await processing_msg.edit(
             "\n".join(response),
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("❌ Close", callback_data="close")]
+                [InlineKeyboardButton("🔄 Refresh Admins", callback_data="refresh_admins"),
+                 InlineKeyboardButton("❌ Close", callback_data="close")]
             ])
         )
         
@@ -103,7 +113,7 @@ async def add_admin(client: Client, message: Message):
         logger.error(f"Add admin error: {e}")
         await message.reply(f"❌ **Error:** `{e}`")
 
-@Bot.on_message(filters.command('deladmin') & filters.private & filters.user(OWNER_ID))
+@Bot.on_message(filters.command('del_admin') & filters.private & filters.user(OWNER_ID))
 async def delete_admin(client: Client, message: Message):
     """Remove admin privileges."""
     try:
@@ -111,36 +121,15 @@ async def delete_admin(client: Client, message: Message):
             return await message.reply(
                 "**🗑️ Remove Admin**\n\n"
                 "**Usage:**\n"
-                "`/deladmin user_id` - Remove specific admin\n"
-                "`/deladmin all` - Remove all admins\n\n"
+                "`/del_admin user_id` - Remove specific admin\n\n"
                 "**Example:**\n"
-                "`/deladmin 123456789`",
+                "`/del_admin 123456789`",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("❌ Close", callback_data="close")]
                 ])
             )
         
         processing_msg = await message.reply("🔄 **Processing...**")
-        existing_admins = await db.get_all_admins()
-        
-        # Remove all admins
-        if message.command[1].lower() == "all":
-            if not existing_admins:
-                return await processing_msg.edit("✅ **No admins to remove.**")
-            
-            removed_count = 0
-            for admin_id in existing_admins:
-                if admin_id != OWNER_ID:  # Don't remove owner
-                    if await db.del_admin(admin_id):
-                        removed_count += 1
-            
-            await processing_msg.edit(
-                f"✅ **Removed {removed_count} admins.**",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Close", callback_data="close")]
-                ])
-            )
-            return
         
         # Remove specific admin
         try:
@@ -161,19 +150,15 @@ async def delete_admin(client: Client, message: Message):
                 ])
             )
         
-        if target_id not in existing_admins:
-            return await processing_msg.edit(
-                f"❌ **User `{target_id}` is not an admin.**",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Close", callback_data="close")]
-                ])
-            )
-        
-        if await db.del_admin(target_id):
+        if await db.remove_admin(target_id):
+            # Reload admin cache
+            await client.reload_admins()
+            
             await processing_msg.edit(
                 f"✅ **Removed admin:** `{target_id}`",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("❌ Close", callback_data="close")]
+                    [InlineKeyboardButton("🔄 Refresh Admins", callback_data="refresh_admins"),
+                     InlineKeyboardButton("❌ Close", callback_data="close")]
                 ])
             )
         else:
@@ -195,33 +180,58 @@ async def list_admins(client: Client, message: Message):
         processing_msg = await message.reply("🔄 **Fetching admin list...**")
         
         admins = await db.get_all_admins()
-        owner_info = await client.get_users(OWNER_ID)
         
-        response = [
-            "**👥 Admin List**\n",
-            f"**👑 Owner:** {owner_info.mention} (`{OWNER_ID}`)\n"
-        ]
+        response = ["**👥 Admin List**\n"]
         
-        if admins:
-            response.append("\n**🛠️ Admins:**")
-            for i, admin_id in enumerate(admins, 1):
-                try:
-                    user_info = await client.get_users(admin_id)
-                    response.append(f"{i}. {user_info.mention} (`{admin_id}`)")
-                except:
-                    response.append(f"{i}. `{admin_id}` (Unable to fetch)")
-        else:
-            response.append("\n**ℹ️ No additional admins.**")
+        for admin in admins:
+            is_owner = admin.get('is_owner', False)
+            username = admin.get('username', 'Unknown')
+            user_id = admin['_id']
+            
+            if is_owner:
+                response.append(f"👑 **Owner:** `{user_id}` - {username}")
+            else:
+                response.append(f"🛠️ **Admin:** `{user_id}` - {username}")
+        
+        response.append(f"\n**Total:** {len(admins)} admins")
         
         await processing_msg.edit(
             "\n".join(response),
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 Refresh", callback_data="refresh_admins"),
                  InlineKeyboardButton("❌ Close", callback_data="close")]
-            ]),
-            disable_web_page_preview=True
+            ])
         )
         
     except Exception as e:
         logger.error(f"List admins error: {e}")
+        await message.reply(f"❌ **Error:** `{e}`")
+
+@Bot.on_message(filters.command('admin_stats') & filters.private & admin_filter)
+async def admin_stats(client: Client, message: Message):
+    """Show admin statistics."""
+    try:
+        processing_msg = await message.reply("🔄 **Fetching statistics...**")
+        
+        stats = await db.get_stats()
+        admin_count = await db.get_admin_count()
+        auto_delete_time = await db.get_auto_delete_time()
+        
+        response = [
+            "**📊 Bot Statistics**\n",
+            f"**👥 Total Admins:** {admin_count}",
+            f"**⏰ Auto-delete Time:** {auto_delete_time} seconds",
+            f"**💾 Database:** {stats.get('database', 'Unknown')}",
+            f"**📁 Collections:** {', '.join(stats.get('collections', []))}"
+        ]
+        
+        await processing_msg.edit(
+            "\n".join(response),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("❌ Close", callback_data="close")]
+            ])
+        )
+        
+    except Exception as e:
+        logger.error(f"Admin stats error: {e}")
         await message.reply(f"❌ **Error:** `{e}`")
