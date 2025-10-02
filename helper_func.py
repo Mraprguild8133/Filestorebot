@@ -8,20 +8,24 @@ from pyrogram.errors import FloodWait
 from bot import Bot
 
 async def check_admin(_, client, message):
+    """Check if user is admin"""
     return Bot.is_admin(message.from_user.id)
 
 async def encode(string):
+    """Encode string to base64"""
     string_bytes = string.encode("ascii")
     base64_bytes = base64.urlsafe_b64encode(string_bytes)
     return (base64_bytes.decode("ascii")).strip("=")
 
 async def decode(base64_string):
+    """Decode base64 string"""
     base64_string = base64_string.strip("=")
     base64_bytes = (base64_string + "=" * (-len(base64_string) % 4)).encode("ascii")
     string_bytes = base64.urlsafe_b64decode(base64_bytes)
     return string_bytes.decode("ascii")
 
 async def get_messages(client, message_ids):
+    """Get messages from channel"""
     messages = []
     for msg_id in message_ids:
         try:
@@ -38,6 +42,7 @@ async def get_messages(client, message_ids):
     return messages
 
 async def get_message_id(client, message):
+    """Extract message ID from forwarded message or link"""
     if message.forward_from_chat and message.forward_from_chat.id == client.db_channel.id:
         return message.forward_from_message_id
     
@@ -56,5 +61,6 @@ async def get_message_id(client, message):
                     return msg_id
     return None
 
-# Create admin filter
+# Create filters
 admin = filters.create(check_admin)
+admin_filter = admin  # Alias for compatibility
