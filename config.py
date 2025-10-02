@@ -10,6 +10,9 @@ API_HASH = os.environ.get("API_HASH", "")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", 0))
 OWNER_ID = int(os.environ.get("OWNER_ID", 0))
 
+# Server Configuration
+PORT = int(os.environ.get("PORT", 8000))
+
 # Admin IDs (comma separated)
 ADMIN_IDS = [int(x.strip()) for x in os.environ.get("ADMIN_IDS", str(OWNER_ID)).split(",") if x.strip()]
 
