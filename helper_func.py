@@ -3,31 +3,27 @@ import re
 import asyncio
 import logging
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from pyrogram import Client, filters
-from pyrogram.enums import ParseMode
+from pyrogram.enums import ParseMode, ChatMemberStatus
 from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import FloodWait, UserNotParticipant, ChatAdminRequired
 
 from config import OWNER_ID, LOGGER
-from bot import Bot
+from database.database import db
 
 logger = logging.getLogger(__name__)
 
 class HelperFunctions:
-    """Helper functions for private bot."""
+    """Helper functions for private bot with Motor."""
     
     @staticmethod
-    def is_admin(user_id: int) -> bool:
+    async def check_admin(client: Client, message: Message) -> bool:
         """Check if user is admin."""
-        return Bot.is_admin(user_id) if hasattr(Bot, 'is_admin') else (user_id == OWNER_ID)
-
-    @staticmethod
-    async def check_admin(filter, client: Client, message: Message) -> bool:
-        """Check if user is admin for filter."""
         try:
             user_id = message.from_user.id
-            is_admin = HelperFunctions.is_admin(user_id)
+            is_admin = await db.is_admin(user_id)
             
             if not is_admin:
                 logger.warning(f"Non-admin access attempt by {user_id}")
@@ -37,6 +33,11 @@ class HelperFunctions:
         except Exception as e:
             logger.error(f"Admin check failed: {e}")
             return False
+
+    @staticmethod
+    async def check_admin_filter(filter, client: Client, message: Message) -> bool:
+        """Check if user is admin for Pyrogram filter."""
+        return await HelperFunctions.check_admin(client, message)
 
     @staticmethod
     async def encode_string(string: str) -> str:
@@ -160,9 +161,14 @@ class HelperFunctions:
         except Exception as e:
             logger.error(f"Auto-delete scheduling failed: {e}")
 
+    @staticmethod
+    async def get_auto_delete_time() -> int:
+        """Get auto-delete time from database."""
+        return await db.get_auto_delete_time()
+
 # Backward compatibility functions
 async def check_admin(filter, client, message):
-    return await HelperFunctions.check_admin(filter, client, message)
+    return await HelperFunctions.check_admin_filter(filter, client, message)
 
 async def encode(string):
     return await HelperFunctions.encode_string(string)
@@ -179,5 +185,8 @@ async def get_message_id(client, message):
 def get_readable_time(seconds):
     return HelperFunctions.get_readable_time(seconds)
 
-# Create admin filter
-admin = filters.create(check_admin)
+# Create filters
+admin_filter = filters.create(check_admin)
+admin = admin_filter  # Alias for backward compatibility
+
+logger.info("✅ Helper functions loaded successfully")
